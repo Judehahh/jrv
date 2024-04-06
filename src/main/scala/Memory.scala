@@ -12,6 +12,8 @@ class ImemPortIO extends Bundle {
 
 class DmemPortIO extends Bundle {
     val addr = Input(UInt(WORD_LEN.W));
+    val wen  = Input(Bool());
+    val din  = Input(UInt(WORD_LEN.W));  // Dmem data in
     val dout = Output(UInt(WORD_LEN.W)); // Dmem data out
 }
 
@@ -25,8 +27,9 @@ class Memory extends Module {
     val mem = Mem(4096 * 4, UInt(8.W));
 
     // Load hex file into memory.
-    loadMemoryFromFileInline(mem, "src/hex/lw.hex".toString());
+    loadMemoryFromFileInline(mem, "src/hex/sw.hex".toString());
 
+    // imem out
     io.imem.inst := Cat(
       mem(io.imem.addr + 3.U(WORD_LEN.W)),
       mem(io.imem.addr + 2.U(WORD_LEN.W)),
@@ -34,10 +37,19 @@ class Memory extends Module {
       mem(io.imem.addr)
     )
 
+    // dmem out
     io.dmem.dout := Cat(
       mem(io.dmem.addr + 3.U(WORD_LEN.W)),
       mem(io.dmem.addr + 2.U(WORD_LEN.W)),
       mem(io.dmem.addr + 1.U(WORD_LEN.W)),
       mem(io.dmem.addr)
     )
+
+    // dmem in
+    when(io.dmem.wen) {
+        mem(io.dmem.addr + 3.U(WORD_LEN.W)) := io.dmem.din(31, 24);
+        mem(io.dmem.addr + 2.U(WORD_LEN.W)) := io.dmem.din(23, 16);
+        mem(io.dmem.addr + 1.U(WORD_LEN.W)) := io.dmem.din(15, 8);
+        mem(io.dmem.addr)                   := io.dmem.din(7, 0);
+    }
 }

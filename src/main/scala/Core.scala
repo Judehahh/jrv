@@ -22,6 +22,7 @@ class Core extends Module {
 
     // ========== ID ==========
     val imm_i = Cat(Fill(20, inst(31)), inst(31, 20));
+    val imm_s = Cat(Fill(20, inst(31)), Cat(inst(31, 25), inst(11, 7)));
 
     val regfile = Mem(32, UInt(WORD_LEN.W));
     val rs1_idx = inst(19, 15);
@@ -37,13 +38,16 @@ class Core extends Module {
     val alu_out = MuxCase(
       0.U(WORD_LEN.W),
       Seq(
-        (inst === LW) -> (rs1_data + imm_i)
+        (inst === LW) -> (rs1_data + imm_i),
+        (inst === SW) -> (rs1_data + imm_s)
       )
     );
     // ========== EX ==========
 
     // ========== MEM ==========
     io.dmem.addr := alu_out;
+    io.dmem.wen  := (inst === SW);
+    io.dmem.din  := rs2_data;
     // ========== MEM ==========
 
     // ========== WB ==========
@@ -54,15 +58,17 @@ class Core extends Module {
     // ========== WB ==========
 
     // debug information
-    printf(p"pc_r      : 0x${Hexadecimal(pc_r)}\n");
-    printf(p"inst      : 0x${Hexadecimal(inst)}\n");
-    printf(p"rs1_idx   : $rs1_idx\n");
-    printf(p"rs2_idx   : $rs2_idx\n");
-    printf(p"rd_idx    : $rd_idx\n");
-    printf(p"rs1_data  : 0x${Hexadecimal(rs1_data)}\n");
-    printf(p"rs2_data  : 0x${Hexadecimal(rs2_data)}\n");
-    printf(p"wb_data   : 0x${Hexadecimal(wb_data)}\n");
-    printf(p"dmem.addr : ${io.dmem.addr}\n");
+    printf(p"pc_r       : 0x${Hexadecimal(pc_r)}\n");
+    printf(p"inst       : 0x${Hexadecimal(inst)}\n");
+    printf(p"rs1_idx    : $rs1_idx\n");
+    printf(p"rs2_idx    : $rs2_idx\n");
+    printf(p"rd_idx     : $rd_idx\n");
+    printf(p"rs1_data   : 0x${Hexadecimal(rs1_data)}\n");
+    printf(p"rs2_data   : 0x${Hexadecimal(rs2_data)}\n");
+    printf(p"wb_data    : 0x${Hexadecimal(wb_data)}\n");
+    printf(p"dmem.addr  : ${io.dmem.addr}\n");
+    printf(p"dmem.wen   : ${io.dmem.wen}\n")
+    printf(p"dmem.wdata : 0x${Hexadecimal(io.dmem.din)}\n")
     printf("-----------\n");
 
     // exit chiseltest
