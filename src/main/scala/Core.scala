@@ -1,9 +1,11 @@
-package fetch
+package jrv
 
 import chisel3._
 import chisel3.util._
 import common.Consts._
 import common.Instructions._
+
+import scala.collection.immutable.List
 
 class Core extends Module {
     val io = IO(new Bundle {
@@ -29,32 +31,62 @@ class Core extends Module {
     val rs2_idx = inst(24, 20);
     val rd_idx  = inst(11, 7);
     val rs1_data =
-        Mux(rs1_idx =/= 0.U(5.W), regfile(rs1_idx), 0.U(WORD_LEN.W));
+        Mux(rs1_idx =/= 0.U(IDX_LEN.W), regfile(rs1_idx), 0.U(WORD_LEN.W));
     val rs2_data =
-        Mux(rs2_idx =/= 0.U(5.W), regfile(rs2_idx), 0.U(WORD_LEN.W));
+        Mux(rs2_idx =/= 0.U(IDX_LEN.W), regfile(rs2_idx), 0.U(WORD_LEN.W));
+
+    val csignals = ListLookup(
+      inst,
+      List(ALU_X, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+      Array(
+        LW   -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_MEM),
+        SW   -> List(ALU_ADD, OP1_RS1, OP2_IMS, MEM_WEN_S, RF_WEN_X, WB_X),
+        ADD  -> List(ALU_ADD, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        ADDI -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SUB  -> List(ALU_SUB, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        AND  -> List(ALU_AND, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        OR   -> List(ALU_OR, OP1_RS1, OP2_RS2, MEM_WEN_S, RF_WEN_S, WB_ALU),
+        XOR  -> List(ALU_XOR, OP1_RS1, OP2_RS2, MEM_WEN_S, RF_WEN_S, WB_ALU),
+        ANDI -> List(ALU_AND, OP1_RS1, OP2_IMI, MEM_WEN_S, RF_WEN_S, WB_ALU),
+        ORI  -> List(ALU_OR, OP1_RS1, OP2_IMI, MEM_WEN_S, RF_WEN_S, WB_ALU),
+        XORI -> List(ALU_XOR, OP1_RS1, OP2_IMI, MEM_WEN_S, RF_WEN_S, WB_ALU)
+      )
+    )
+    val List(func, op1_sel, op2_sel, mem_wen, rf_wen, wb_sel) = csignals;
+
+    val op1_data = MuxCase(
+      0.U(WORD_LEN.W),
+      Seq(
+        (op1_sel === OP1_RS1) -> rs1_data
+      )
+    )
+
+    val op2_data = MuxCase(
+      0.U(WORD_LEN.W),
+      Seq(
+        (op2_sel === OP2_RS2) -> rs2_data,
+        (op2_sel === OP2_IMI) -> imm_i,
+        (op2_sel === OP2_IMS) -> imm_s
+      )
+    )
     // ========== ID ==========
 
     // ========== EX ==========
     val alu_out = MuxCase(
       0.U(WORD_LEN.W),
       Seq(
-        (inst === LW || inst === ADDI) -> (rs1_data + imm_i),
-        (inst === SW)                  -> (rs1_data + imm_s),
-        (inst === ADD)                 -> (rs1_data + rs2_data),
-        (inst === SUB)                 -> (rs1_data + rs2_data),
-        (inst === AND)                 -> (rs1_data & rs2_data),
-        (inst === OR)                  -> (rs1_data | rs2_data),
-        (inst === XOR)                 -> (rs1_data ^ rs2_data),
-        (inst === ANDI)                -> (rs1_data & imm_i),
-        (inst === ORI)                 -> (rs1_data | imm_i),
-        (inst === XORI)                -> (rs1_data ^ imm_i)
+        (func === ALU_ADD) -> (rs1_data + imm_i),
+        (func === ALU_SUB) -> (rs1_data - imm_i),
+        (func === ALU_AND) -> (rs1_data & imm_i),
+        (func === ALU_OR)  -> (rs1_data | imm_i),
+        (func === ALU_XOR) -> (rs1_data ^ imm_i)
       )
     );
     // ========== EX ==========
 
     // ========== MEM ==========
     io.dmem.addr := alu_out;
-    io.dmem.wen  := (inst === SW);
+    io.dmem.wen  := mem_wen;
     io.dmem.din  := rs2_data;
     // ========== MEM ==========
 
@@ -62,14 +94,11 @@ class Core extends Module {
     val wb_data = MuxCase(
       alu_out,
       Seq(
-        (inst === LW) -> io.dmem.dout
+        (wb_sel === WB_MEM) -> io.dmem.dout
       )
     );
 
-    when(
-      inst === LW || inst === ADD || inst === ADDI || inst === SUB ||
-          inst === AND || inst === OR || inst === XOR || inst === ANDI || inst === ORI || inst === XORI
-    ) {
+    when(rf_wen === RF_WEN_S) {
         regfile(rd_idx) := wb_data;
     }
     // ========== WB ==========
