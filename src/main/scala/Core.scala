@@ -38,8 +38,10 @@ class Core extends Module {
     val alu_out = MuxCase(
       0.U(WORD_LEN.W),
       Seq(
-        (inst === LW) -> (rs1_data + imm_i),
-        (inst === SW) -> (rs1_data + imm_s)
+        (inst === LW || inst === ADDI) -> (rs1_data + imm_i),
+        (inst === SW)                  -> (rs1_data + imm_s),
+        (inst === ADD)                 -> (rs1_data + rs2_data),
+        (inst === SUB)                 -> (rs1_data + rs2_data)
       )
     );
     // ========== EX ==========
@@ -51,8 +53,14 @@ class Core extends Module {
     // ========== MEM ==========
 
     // ========== WB ==========
-    val wb_data = io.dmem.dout;
-    when(inst === LW) {
+    val wb_data = MuxCase(
+      alu_out,
+      Seq(
+        (inst === LW) -> io.dmem.dout
+      )
+    );
+
+    when(inst === LW || inst === ADD || inst === ADDI || inst === SUB) {
         regfile(rd_idx) := wb_data;
     }
     // ========== WB ==========
