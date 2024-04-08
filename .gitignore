@@ -3,6 +3,7 @@
 .metals/
 .scala-build/
 .vscode/
+results/
 ### Project Specific stuff
 test_run_dir/*
 ### XilinxISE template

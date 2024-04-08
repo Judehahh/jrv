@@ -12,6 +12,7 @@ class Core extends Module {
         val imem = Flipped(new ImemPortIO);
         val dmem = Flipped(new DmemPortIO);
         val exit = Output(Bool());
+        val gp   = Output(UInt(WORD_LEN.W));
     })
 
     val regfile     = Mem(32, UInt(WORD_LEN.W));
@@ -207,6 +208,7 @@ class Core extends Module {
     // debug information
     printf(p"pc_r       : 0x${Hexadecimal(pc_r)}\n");
     printf(p"inst       : 0x${Hexadecimal(inst)}\n");
+    printf(p"gp         : 0x${Hexadecimal(regfile(3))}\n");
     printf(p"rs1_idx    : $rs1_idx\n");
     printf(p"rs2_idx    : $rs2_idx\n");
     printf(p"rd_idx     : $rd_idx\n");
@@ -219,5 +221,6 @@ class Core extends Module {
     printf("-----------\n");
 
     // exit chiseltest
-    io.exit := (inst === 0x22222222.U(WORD_LEN.W));
+    io.exit := (pc_r === 0x44.U(WORD_LEN.W));
+    io.gp   := regfile(3);
 }
