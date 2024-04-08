@@ -8,6 +8,7 @@ object Consts {
     val IDX_LEN  = 5;
     var MEM_BASE = 0.U(WORD_LEN.W);
 
+    // ========== Control signals ==========
     val FUNC_LEN = 5;
     val ALU_X    = 0.U(FUNC_LEN.W);
     val ALU_ADD  = 1.U(FUNC_LEN.W);
@@ -58,9 +59,19 @@ object Consts {
     val WB_PC      = 2.U(WB_SEL_LEN.W);
     val WB_CSR     = 3.U(WB_SEL_LEN.W);
 
-    val CSR_LEN = 2;
-    val CSR_X   = 0.U(CSR_LEN.W);
-    val CSR_W   = 1.U(CSR_LEN.W);
-    val CSR_S   = 2.U(CSR_LEN.W);
-    val CSR_C   = 3.U(CSR_LEN.W);
+    val CSR_CMD_LEN = 3;
+    val CSR_X       = 0.U(CSR_CMD_LEN.W);
+    val CSR_W       = 1.U(CSR_CMD_LEN.W);
+    val CSR_S       = 2.U(CSR_CMD_LEN.W);
+    val CSR_C       = 3.U(CSR_CMD_LEN.W);
+    val CSR_E       = 4.U(CSR_CMD_LEN.W);
+    // ========== Control signals ==========
+
+    // ========== CSRs index ==========
+    val CSR_IDX_LEN = 12;
+    val MSTATUS     = 0x300.U(CSR_IDX_LEN.W);
+    val MTVEC       = 0x305.U(CSR_IDX_LEN.W);
+    val MEPC        = 0x341.U(CSR_IDX_LEN.W);
+    val MCAUSE      = 0x342.U(CSR_IDX_LEN.W);
+    // ========== CSRs index ==========
 }

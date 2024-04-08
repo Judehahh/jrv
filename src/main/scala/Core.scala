@@ -14,6 +14,9 @@ class Core extends Module {
         val exit = Output(Bool());
     })
 
+    val regfile     = Mem(32, UInt(WORD_LEN.W));
+    val csr_regfile = Mem(4096, UInt(WORD_LEN.W));
+
     // ========== IF ==========
     val inst = io.imem.inst;
 
@@ -26,11 +29,14 @@ class Core extends Module {
     val jmp_flag = inst === JAL || inst === JALR;
     val alu_out  = Wire(UInt(WORD_LEN.W));
 
+    val trap_flag = inst === ECALL;
+
     val pc_next = MuxCase(
       pc_plus4,
       Seq(
-        br_flag  -> br_addr,
-        jmp_flag -> alu_out
+        br_flag   -> br_addr,
+        jmp_flag  -> alu_out,
+        trap_flag -> csr_regfile(MTVEC)
       )
     );
     pc_r := pc_next;
@@ -46,16 +52,11 @@ class Core extends Module {
     val imm_u = Cat(inst(31, 12), 0.U(12.W));
     val imm_z = Cat(0.U(27.W), inst(19, 15));
 
-    val regfile  = Mem(32, UInt(WORD_LEN.W));
     val rs1_idx  = inst(19, 15);
     val rs2_idx  = inst(24, 20);
     val rd_idx   = inst(11, 7);
     val rs1_data = Mux(rs1_idx =/= 0.U(IDX_LEN.W), regfile(rs1_idx), 0.U(WORD_LEN.W));
     val rs2_data = Mux(rs2_idx =/= 0.U(IDX_LEN.W), regfile(rs2_idx), 0.U(WORD_LEN.W));
-
-    val csr_regfile = Mem(4096, UInt(WORD_LEN.W));
-    val csr_idx     = inst(31, 20);
-    val csr_rdata   = csr_regfile(csr_idx);
 
     val List(func, op1_sel, op2_sel, mem_wen, rf_wen, wb_sel, csr_cmd) = ListLookup(
       inst,
@@ -107,7 +108,8 @@ class Core extends Module {
         CSRRC  -> List(ALU_SRC1, OP1_RS1, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_C),
         CSRRWI -> List(ALU_SRC1, OP1_IMZ, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_W),
         CSRRSI -> List(ALU_SRC1, OP1_IMZ, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_S),
-        CSRRCI -> List(ALU_SRC1, OP1_IMZ, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_C)
+        CSRRCI -> List(ALU_SRC1, OP1_IMZ, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_C),
+        ECALL  -> List(ALU_X, OP1_X, OP2_X, MEM_WEN_X, RF_WEN_X, WB_X, CSR_E)
       )
     )
 
@@ -170,12 +172,15 @@ class Core extends Module {
     io.dmem.din  := rs2_data;
 
     // csr
+    val csr_idx   = Mux(csr_cmd === CSR_E, MCAUSE, inst(31, 20));
+    val csr_rdata = csr_regfile(csr_idx);
     val csr_wdata = MuxCase(
       0.U(WORD_LEN.W),
       Seq(
         (csr_cmd === CSR_W) -> op1_data,
         (csr_cmd === CSR_S) -> (csr_rdata | op1_data),
-        (csr_cmd === CSR_C) -> (csr_rdata & (~op1_data).asUInt)
+        (csr_cmd === CSR_C) -> (csr_rdata & (~op1_data).asUInt),
+        (csr_cmd === CSR_E) -> 11.U(WORD_LEN.W) // ECALL
       )
     )
 
@@ -210,7 +215,7 @@ class Core extends Module {
     printf(p"wb_data    : 0x${Hexadecimal(wb_data)}\n");
     printf(p"dmem.addr  : ${io.dmem.addr}\n");
     printf(p"dmem.wen   : ${io.dmem.wen}\n")
-    printf(p"dmem.wdata : 0x${Hexadecimal(io.dmem.din)}\n")
+    printf(p"dmem.din   : 0x${Hexadecimal(io.dmem.din)}\n")
     printf("-----------\n");
 
     // exit chiseltest
