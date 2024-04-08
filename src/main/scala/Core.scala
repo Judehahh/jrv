@@ -15,70 +15,90 @@ class Core extends Module {
     })
 
     // ========== IF ==========
+    val inst = io.imem.inst;
+
     val pc_r     = RegInit(MEM_BASE);
     val pc_plus4 = pc_r + 4.U(WORD_LEN.W);
-    val br_flag  = Wire(Bool());
-    val br_addr  = Wire(UInt(WORD_LEN.W));
 
-    val pc_next = Mux(br_flag, br_addr, pc_plus4);
+    val br_flag = Wire(Bool());
+    val br_addr = Wire(UInt(WORD_LEN.W));
+
+    val jmp_flag = inst === JAL || inst === JALR;
+    val alu_out  = Wire(UInt(WORD_LEN.W));
+
+    val pc_next = MuxCase(
+      pc_plus4,
+      Seq(
+        br_flag  -> br_addr,
+        jmp_flag -> alu_out
+      )
+    );
     pc_r := pc_next;
 
     io.imem.addr := pc_r;
-    val inst = io.imem.inst;
     // ========== IF ==========
 
     // ========== ID ==========
     val imm_i = Cat(Fill(20, inst(31)), inst(31, 20));
     val imm_s = Cat(Fill(20, inst(31)), inst(31, 25), inst(11, 7));
     val imm_b = Cat(Fill(20, inst(31)), inst(7), inst(30, 25), inst(11, 8));
+    val imm_j = Cat(Fill(12, inst(31)), inst(19, 12), inst(20), inst(30, 21), 0.U(1.W));
 
-    val regfile = Mem(32, UInt(WORD_LEN.W));
-    val rs1_idx = inst(19, 15);
-    val rs2_idx = inst(24, 20);
-    val rd_idx  = inst(11, 7);
-    val rs1_data =
-        Mux(rs1_idx =/= 0.U(IDX_LEN.W), regfile(rs1_idx), 0.U(WORD_LEN.W));
-    val rs2_data =
-        Mux(rs2_idx =/= 0.U(IDX_LEN.W), regfile(rs2_idx), 0.U(WORD_LEN.W));
+    val regfile  = Mem(32, UInt(WORD_LEN.W));
+    val rs1_idx  = inst(19, 15);
+    val rs2_idx  = inst(24, 20);
+    val rd_idx   = inst(11, 7);
+    val rs1_data = Mux(rs1_idx =/= 0.U(IDX_LEN.W), regfile(rs1_idx), 0.U(WORD_LEN.W));
+    val rs2_data = Mux(rs2_idx =/= 0.U(IDX_LEN.W), regfile(rs2_idx), 0.U(WORD_LEN.W));
 
     val List(func, op1_sel, op2_sel, mem_wen, rf_wen, wb_sel) = ListLookup(
       inst,
       List(ALU_X, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
       Array(
-        LW    -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_MEM),
-        SW    -> List(ALU_ADD, OP1_RS1, OP2_IMS, MEM_WEN_S, RF_WEN_X, WB_X),
-        ADD   -> List(ALU_ADD, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        ADDI  -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SUB   -> List(ALU_SUB, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        AND   -> List(ALU_AND, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        OR    -> List(ALU_OR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        XOR   -> List(ALU_XOR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        ANDI  -> List(ALU_AND, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        ORI   -> List(ALU_OR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        XORI  -> List(ALU_XOR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SLL   -> List(ALU_SLL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SRL   -> List(ALU_SRL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SRA   -> List(ALU_SRA, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SLLI  -> List(ALU_SLL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SRLI  -> List(ALU_SRL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SRAI  -> List(ALU_SRA, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        // Memory
+        LW -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_MEM),
+        SW -> List(ALU_ADD, OP1_RS1, OP2_IMS, MEM_WEN_S, RF_WEN_X, WB_X),
+        // Calculation
+        ADD  -> List(ALU_ADD, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        ADDI -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SUB  -> List(ALU_SUB, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        // Logic
+        AND  -> List(ALU_AND, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        OR   -> List(ALU_OR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        XOR  -> List(ALU_XOR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        ANDI -> List(ALU_AND, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        ORI  -> List(ALU_OR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        XORI -> List(ALU_XOR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        // Shift
+        SLL  -> List(ALU_SLL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SRL  -> List(ALU_SRL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SRA  -> List(ALU_SRA, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SLLI -> List(ALU_SLL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SRLI -> List(ALU_SRL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SRAI -> List(ALU_SRA, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        // Comparison
         SLT   -> List(ALU_SLT, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
         SLTU  -> List(ALU_SLTU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
         SLTI  -> List(ALU_SLT, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
         SLTIU -> List(ALU_SLTU, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        BEQ   -> List(BR_BEQ, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BNE   -> List(BR_BNE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BLT   -> List(BR_BLT, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BLTU  -> List(BR_BLTU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BGE   -> List(BR_BGE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BGEU  -> List(BR_BGEU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X)
+        // Branch
+        BEQ  -> List(BR_BEQ, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BNE  -> List(BR_BNE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BLT  -> List(BR_BLT, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BLTU -> List(BR_BLTU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BGE  -> List(BR_BGE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BGEU -> List(BR_BGEU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        // Jump
+        JAL  -> List(ALU_ADD, OP1_PC, OP2_IMJ, MEM_WEN_X, RF_WEN_S, WB_PC),
+        JALR -> List(ALU_JALR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_PC)
       )
     )
 
     val op1_data = MuxCase(
       0.U(WORD_LEN.W),
       Seq(
-        (op1_sel === OP1_RS1) -> rs1_data
+        (op1_sel === OP1_RS1) -> rs1_data,
+        (op1_sel === OP1_PC)  -> pc_r
       )
     )
 
@@ -87,13 +107,14 @@ class Core extends Module {
       Seq(
         (op2_sel === OP2_RS2) -> rs2_data,
         (op2_sel === OP2_IMI) -> imm_i,
-        (op2_sel === OP2_IMS) -> imm_s
+        (op2_sel === OP2_IMS) -> imm_s,
+        (op2_sel === OP2_IMJ) -> imm_j
       )
     )
     // ========== ID ==========
 
     // ========== EX ==========
-    val alu_out = MuxCase(
+    alu_out := MuxCase(
       0.U(WORD_LEN.W),
       Seq(
         (func === ALU_ADD)  -> (op1_data + op2_data),
@@ -105,7 +126,8 @@ class Core extends Module {
         (func === ALU_SRL)  -> (op1_data >> op2_data(4, 0)).asUInt,
         (func === ALU_SRA)  -> (op1_data.asSInt >> op2_data(4, 0)).asUInt,
         (func === ALU_SLT)  -> (op1_data.asSInt < op2_data.asSInt).asUInt,
-        (func === ALU_SLTU) -> (op1_data < op2_data).asUInt
+        (func === ALU_SLTU) -> (op1_data < op2_data).asUInt,
+        (func === ALU_JALR) -> ((op1_data + op2_data) & (~1.U(WORD_LEN.W)).asUInt)
       )
     );
 
@@ -133,7 +155,8 @@ class Core extends Module {
     val wb_data = MuxCase(
       alu_out,
       Seq(
-        (wb_sel === WB_MEM) -> io.dmem.dout
+        (wb_sel === WB_MEM) -> io.dmem.dout,
+        (wb_sel === WB_PC)  -> pc_plus4
       )
     );
 
