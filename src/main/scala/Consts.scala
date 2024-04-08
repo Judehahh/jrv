@@ -18,6 +18,8 @@ object Consts {
     val ALU_SLL  = 6.U(FUNC_LEN.W);
     val ALU_SRL  = 7.U(FUNC_LEN.W);
     val ALU_SRA  = 8.U(FUNC_LEN.W);
+    val ALU_SLT  = 9.U(FUNC_LEN.W);
+    val ALU_SLTU = 10.U(FUNC_LEN.W);
 
     val OP1_LEN = 1;
     val OP1_RS1 = 0.U(OP1_LEN.W);
