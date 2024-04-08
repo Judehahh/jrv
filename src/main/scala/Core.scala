@@ -15,8 +15,13 @@ class Core extends Module {
     })
 
     // ========== IF ==========
-    val pc_r = RegInit(MEM_BASE);
-    pc_r := pc_r + 4.U(WORD_LEN.W);
+    val pc_r     = RegInit(MEM_BASE);
+    val pc_plus4 = pc_r + 4.U(WORD_LEN.W);
+    val br_flag  = Wire(Bool());
+    val br_addr  = Wire(UInt(WORD_LEN.W));
+
+    val pc_next = Mux(br_flag, br_addr, pc_plus4);
+    pc_r := pc_next;
 
     io.imem.addr := pc_r;
     val inst = io.imem.inst;
@@ -24,7 +29,8 @@ class Core extends Module {
 
     // ========== ID ==========
     val imm_i = Cat(Fill(20, inst(31)), inst(31, 20));
-    val imm_s = Cat(Fill(20, inst(31)), Cat(inst(31, 25), inst(11, 7)));
+    val imm_s = Cat(Fill(20, inst(31)), inst(31, 25), inst(11, 7));
+    val imm_b = Cat(Fill(20, inst(31)), inst(7), inst(30, 25), inst(11, 8));
 
     val regfile = Mem(32, UInt(WORD_LEN.W));
     val rs1_idx = inst(19, 15);
@@ -59,7 +65,13 @@ class Core extends Module {
         SLT   -> List(ALU_SLT, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
         SLTU  -> List(ALU_SLTU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
         SLTI  -> List(ALU_SLT, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SLTIU -> List(ALU_SLTU, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU)
+        SLTIU -> List(ALU_SLTU, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        BEQ   -> List(BR_BEQ, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BNE   -> List(BR_BNE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BLT   -> List(BR_BLT, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BLTU  -> List(BR_BLTU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BGE   -> List(BR_BGE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BGEU  -> List(BR_BGEU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X)
       )
     )
 
@@ -96,6 +108,19 @@ class Core extends Module {
         (func === ALU_SLTU) -> (op1_data < op2_data).asUInt
       )
     );
+
+    br_flag := MuxCase(
+      false.B,
+      Seq(
+        (func === BR_BEQ) -> (op1_data === op2_data),
+        (func === BNE)    -> !(op1_data === op2_data),
+        (func === BLT)    -> (op1_data.asSInt < op2_data.asSInt),
+        (func === BLTU)   -> (op1_data < op2_data),
+        (func === BGE)    -> !(op1_data.asSInt < op2_data.asSInt),
+        (func === BGEU)   -> !(op1_data < op2_data)
+      )
+    )
+    br_addr := pc_r + imm_b;
     // ========== EX ==========
 
     // ========== MEM ==========

@@ -8,7 +8,7 @@ object Consts {
     val IDX_LEN  = 5;
     var MEM_BASE = 0.U(WORD_LEN.W);
 
-    val FUNC_LEN = 4;
+    val FUNC_LEN = 5;
     val ALU_X    = 0.U(FUNC_LEN.W);
     val ALU_ADD  = 1.U(FUNC_LEN.W);
     val ALU_SUB  = 2.U(FUNC_LEN.W);
@@ -20,6 +20,12 @@ object Consts {
     val ALU_SRA  = 8.U(FUNC_LEN.W);
     val ALU_SLT  = 9.U(FUNC_LEN.W);
     val ALU_SLTU = 10.U(FUNC_LEN.W);
+    val BR_BEQ   = 11.U(FUNC_LEN.W);
+    val BR_BNE   = 12.U(FUNC_LEN.W);
+    val BR_BLT   = 13.U(FUNC_LEN.W);
+    val BR_BLTU  = 14.U(FUNC_LEN.W);
+    val BR_BGE   = 15.U(FUNC_LEN.W);
+    val BR_BGEU  = 16.U(FUNC_LEN.W);
 
     val OP1_LEN = 1;
     val OP1_RS1 = 0.U(OP1_LEN.W);
