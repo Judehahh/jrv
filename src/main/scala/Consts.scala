@@ -28,15 +28,17 @@ object Consts {
     val BR_BGE   = 16.U(FUNC_LEN.W);
     val BR_BGEU  = 17.U(FUNC_LEN.W);
 
-    val OP1_LEN = 1;
+    val OP1_LEN = 2;
     val OP1_RS1 = 0.U(OP1_LEN.W);
     val OP1_PC  = 1.U(OP1_LEN.W);
+    val OP1_X   = 2.U(OP1_LEN.W);
 
-    val OP2_LEN = 2;
+    val OP2_LEN = 3;
     val OP2_RS2 = 0.U(OP2_LEN.W);
     val OP2_IMI = 1.U(OP2_LEN.W);
     val OP2_IMS = 2.U(OP2_LEN.W);
     val OP2_IMJ = 3.U(OP2_LEN.W);
+    val OP2_IMU = 4.U(OP2_LEN.W);
 
     val MEM_WEN_LEN = 1;
     val MEM_WEN_X   = 0.U(MEM_WEN_LEN.W);

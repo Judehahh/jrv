@@ -43,6 +43,7 @@ class Core extends Module {
     val imm_s = Cat(Fill(20, inst(31)), inst(31, 25), inst(11, 7));
     val imm_b = Cat(Fill(20, inst(31)), inst(7), inst(30, 25), inst(11, 8));
     val imm_j = Cat(Fill(12, inst(31)), inst(19, 12), inst(20), inst(30, 21), 0.U(1.W));
+    val imm_u = Cat(inst(31, 12), 0.U(12.W));
 
     val regfile  = Mem(32, UInt(WORD_LEN.W));
     val rs1_idx  = inst(19, 15);
@@ -90,7 +91,10 @@ class Core extends Module {
         BGEU -> List(BR_BGEU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
         // Jump
         JAL  -> List(ALU_ADD, OP1_PC, OP2_IMJ, MEM_WEN_X, RF_WEN_S, WB_PC),
-        JALR -> List(ALU_JALR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_PC)
+        JALR -> List(ALU_JALR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_PC),
+        // Load imm
+        LUI   -> List(ALU_ADD, OP1_X, OP2_IMU, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        AUIPC -> List(ALU_ADD, OP1_PC, OP2_IMU, MEM_WEN_X, RF_WEN_S, WB_ALU)
       )
     )
 
@@ -108,7 +112,8 @@ class Core extends Module {
         (op2_sel === OP2_RS2) -> rs2_data,
         (op2_sel === OP2_IMI) -> imm_i,
         (op2_sel === OP2_IMS) -> imm_s,
-        (op2_sel === OP2_IMJ) -> imm_j
+        (op2_sel === OP2_IMJ) -> imm_j,
+        (op2_sel === OP2_IMU) -> imm_u
       )
     )
     // ========== ID ==========
