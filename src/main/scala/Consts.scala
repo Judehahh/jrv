@@ -21,24 +21,27 @@ object Consts {
     val ALU_SLT  = 9.U(FUNC_LEN.W);
     val ALU_SLTU = 10.U(FUNC_LEN.W);
     val ALU_JALR = 11.U(FUNC_LEN.W);
-    val BR_BEQ   = 12.U(FUNC_LEN.W);
-    val BR_BNE   = 13.U(FUNC_LEN.W);
-    val BR_BLT   = 14.U(FUNC_LEN.W);
-    val BR_BLTU  = 15.U(FUNC_LEN.W);
-    val BR_BGE   = 16.U(FUNC_LEN.W);
-    val BR_BGEU  = 17.U(FUNC_LEN.W);
+    val ALU_SRC1 = 12.U(FUNC_LEN.W);
+    val BR_BEQ   = 13.U(FUNC_LEN.W);
+    val BR_BNE   = 14.U(FUNC_LEN.W);
+    val BR_BLT   = 15.U(FUNC_LEN.W);
+    val BR_BLTU  = 16.U(FUNC_LEN.W);
+    val BR_BGE   = 17.U(FUNC_LEN.W);
+    val BR_BGEU  = 18.U(FUNC_LEN.W);
 
     val OP1_LEN = 2;
-    val OP1_RS1 = 0.U(OP1_LEN.W);
-    val OP1_PC  = 1.U(OP1_LEN.W);
-    val OP1_X   = 2.U(OP1_LEN.W);
+    val OP1_X   = 0.U(OP1_LEN.W);
+    val OP1_RS1 = 1.U(OP1_LEN.W);
+    val OP1_PC  = 2.U(OP1_LEN.W);
+    val OP1_IMZ = 3.U(OP1_LEN.W);
 
     val OP2_LEN = 3;
-    val OP2_RS2 = 0.U(OP2_LEN.W);
-    val OP2_IMI = 1.U(OP2_LEN.W);
-    val OP2_IMS = 2.U(OP2_LEN.W);
-    val OP2_IMJ = 3.U(OP2_LEN.W);
-    val OP2_IMU = 4.U(OP2_LEN.W);
+    val OP2_X   = 0.U(OP2_LEN.W);
+    val OP2_RS2 = 1.U(OP2_LEN.W);
+    val OP2_IMI = 2.U(OP2_LEN.W);
+    val OP2_IMS = 3.U(OP2_LEN.W);
+    val OP2_IMJ = 4.U(OP2_LEN.W);
+    val OP2_IMU = 5.U(OP2_LEN.W);
 
     val MEM_WEN_LEN = 1;
     val MEM_WEN_X   = 0.U(MEM_WEN_LEN.W);
@@ -53,4 +56,11 @@ object Consts {
     val WB_ALU     = 0.U(WB_SEL_LEN.W); // wb_data <> alu_out by default
     val WB_MEM     = 1.U(WB_SEL_LEN.W);
     val WB_PC      = 2.U(WB_SEL_LEN.W);
+    val WB_CSR     = 3.U(WB_SEL_LEN.W);
+
+    val CSR_LEN = 2;
+    val CSR_X   = 0.U(CSR_LEN.W);
+    val CSR_W   = 1.U(CSR_LEN.W);
+    val CSR_S   = 2.U(CSR_LEN.W);
+    val CSR_C   = 3.U(CSR_LEN.W);
 }

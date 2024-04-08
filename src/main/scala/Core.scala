@@ -44,6 +44,7 @@ class Core extends Module {
     val imm_b = Cat(Fill(20, inst(31)), inst(7), inst(30, 25), inst(11, 8));
     val imm_j = Cat(Fill(12, inst(31)), inst(19, 12), inst(20), inst(30, 21), 0.U(1.W));
     val imm_u = Cat(inst(31, 12), 0.U(12.W));
+    val imm_z = Cat(0.U(27.W), inst(19, 15));
 
     val regfile  = Mem(32, UInt(WORD_LEN.W));
     val rs1_idx  = inst(19, 15);
@@ -52,49 +53,61 @@ class Core extends Module {
     val rs1_data = Mux(rs1_idx =/= 0.U(IDX_LEN.W), regfile(rs1_idx), 0.U(WORD_LEN.W));
     val rs2_data = Mux(rs2_idx =/= 0.U(IDX_LEN.W), regfile(rs2_idx), 0.U(WORD_LEN.W));
 
-    val List(func, op1_sel, op2_sel, mem_wen, rf_wen, wb_sel) = ListLookup(
+    val csr_regfile = Mem(4096, UInt(WORD_LEN.W));
+    val csr_idx     = inst(31, 20);
+    val csr_rdata   = csr_regfile(csr_idx);
+
+    val List(func, op1_sel, op2_sel, mem_wen, rf_wen, wb_sel, csr_cmd) = ListLookup(
       inst,
-      List(ALU_X, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+      List(ALU_X, OP1_X, OP2_X, MEM_WEN_X, RF_WEN_X, WB_X, CSR_X),
       Array(
         // Memory
-        LW -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_MEM),
-        SW -> List(ALU_ADD, OP1_RS1, OP2_IMS, MEM_WEN_S, RF_WEN_X, WB_X),
+        LW -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_MEM, CSR_X),
+        SW -> List(ALU_ADD, OP1_RS1, OP2_IMS, MEM_WEN_S, RF_WEN_X, WB_X, CSR_X),
         // Calculation
-        ADD  -> List(ALU_ADD, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        ADDI -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SUB  -> List(ALU_SUB, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        ADD  -> List(ALU_ADD, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        ADDI -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        SUB  -> List(ALU_SUB, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
         // Logic
-        AND  -> List(ALU_AND, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        OR   -> List(ALU_OR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        XOR  -> List(ALU_XOR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        ANDI -> List(ALU_AND, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        ORI  -> List(ALU_OR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        XORI -> List(ALU_XOR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        AND  -> List(ALU_AND, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        OR   -> List(ALU_OR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        XOR  -> List(ALU_XOR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        ANDI -> List(ALU_AND, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        ORI  -> List(ALU_OR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        XORI -> List(ALU_XOR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
         // Shift
-        SLL  -> List(ALU_SLL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SRL  -> List(ALU_SRL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SRA  -> List(ALU_SRA, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SLLI -> List(ALU_SLL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SRLI -> List(ALU_SRL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SRAI -> List(ALU_SRA, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SLL  -> List(ALU_SLL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        SRL  -> List(ALU_SRL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        SRA  -> List(ALU_SRA, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        SLLI -> List(ALU_SLL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        SRLI -> List(ALU_SRL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        SRAI -> List(ALU_SRA, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
         // Comparison
-        SLT   -> List(ALU_SLT, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SLTU  -> List(ALU_SLTU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SLTI  -> List(ALU_SLT, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        SLTIU -> List(ALU_SLTU, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SLT   -> List(ALU_SLT, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        SLTU  -> List(ALU_SLTU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        SLTI  -> List(ALU_SLT, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        SLTIU -> List(ALU_SLTU, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
         // Branch
-        BEQ  -> List(BR_BEQ, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BNE  -> List(BR_BNE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BLT  -> List(BR_BLT, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BLTU -> List(BR_BLTU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BGE  -> List(BR_BGE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
-        BGEU -> List(BR_BGEU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X),
+        BEQ  -> List(BR_BEQ, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X, CSR_X),
+        BNE  -> List(BR_BNE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X, CSR_X),
+        BLT  -> List(BR_BLT, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X, CSR_X),
+        BLTU -> List(BR_BLTU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X, CSR_X),
+        BGE  -> List(BR_BGE, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X, CSR_X),
+        BGEU -> List(BR_BGEU, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_X, WB_X, CSR_X),
         // Jump
-        JAL  -> List(ALU_ADD, OP1_PC, OP2_IMJ, MEM_WEN_X, RF_WEN_S, WB_PC),
-        JALR -> List(ALU_JALR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_PC),
+        JAL  -> List(ALU_ADD, OP1_PC, OP2_IMJ, MEM_WEN_X, RF_WEN_S, WB_PC, CSR_X),
+        JALR -> List(ALU_JALR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_PC, CSR_X),
         // Load imm
-        LUI   -> List(ALU_ADD, OP1_X, OP2_IMU, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        AUIPC -> List(ALU_ADD, OP1_PC, OP2_IMU, MEM_WEN_X, RF_WEN_S, WB_ALU)
+        LUI   -> List(ALU_ADD, OP1_X, OP2_IMU, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+        AUIPC -> List(ALU_ADD, OP1_PC, OP2_IMU, MEM_WEN_X, RF_WEN_S, WB_ALU, CSR_X),
+
+        // Zicsr
+        CSRRW  -> List(ALU_SRC1, OP1_RS1, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_W),
+        CSRRS  -> List(ALU_SRC1, OP1_RS1, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_S),
+        CSRRC  -> List(ALU_SRC1, OP1_RS1, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_C),
+        CSRRWI -> List(ALU_SRC1, OP1_IMZ, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_W),
+        CSRRSI -> List(ALU_SRC1, OP1_IMZ, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_S),
+        CSRRCI -> List(ALU_SRC1, OP1_IMZ, OP2_X, MEM_WEN_X, RF_WEN_S, WB_CSR, CSR_C)
       )
     )
 
@@ -132,7 +145,8 @@ class Core extends Module {
         (func === ALU_SRA)  -> (op1_data.asSInt >> op2_data(4, 0)).asUInt,
         (func === ALU_SLT)  -> (op1_data.asSInt < op2_data.asSInt).asUInt,
         (func === ALU_SLTU) -> (op1_data < op2_data).asUInt,
-        (func === ALU_JALR) -> ((op1_data + op2_data) & (~1.U(WORD_LEN.W)).asUInt)
+        (func === ALU_JALR) -> ((op1_data + op2_data) & (~1.U(WORD_LEN.W)).asUInt),
+        (func === ALU_SRC1) -> op1_data
       )
     );
 
@@ -154,6 +168,20 @@ class Core extends Module {
     io.dmem.addr := alu_out;
     io.dmem.wen  := mem_wen;
     io.dmem.din  := rs2_data;
+
+    // csr
+    val csr_wdata = MuxCase(
+      0.U(WORD_LEN.W),
+      Seq(
+        (csr_cmd === CSR_W) -> op1_data,
+        (csr_cmd === CSR_S) -> (csr_rdata | op1_data),
+        (csr_cmd === CSR_C) -> (csr_rdata & (~op1_data).asUInt)
+      )
+    )
+
+    when(csr_cmd =/= CSR_X) {
+        csr_regfile(csr_idx) := csr_wdata;
+    }
     // ========== MEM ==========
 
     // ========== WB ==========
@@ -161,7 +189,8 @@ class Core extends Module {
       alu_out,
       Seq(
         (wb_sel === WB_MEM) -> io.dmem.dout,
-        (wb_sel === WB_PC)  -> pc_plus4
+        (wb_sel === WB_PC)  -> pc_plus4,
+        (wb_sel === WB_CSR) -> csr_rdata
       )
     );
 
