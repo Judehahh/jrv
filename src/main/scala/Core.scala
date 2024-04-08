@@ -45,11 +45,17 @@ class Core extends Module {
         ADDI -> List(ALU_ADD, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
         SUB  -> List(ALU_SUB, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
         AND  -> List(ALU_AND, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
-        OR   -> List(ALU_OR, OP1_RS1, OP2_RS2, MEM_WEN_S, RF_WEN_S, WB_ALU),
-        XOR  -> List(ALU_XOR, OP1_RS1, OP2_RS2, MEM_WEN_S, RF_WEN_S, WB_ALU),
-        ANDI -> List(ALU_AND, OP1_RS1, OP2_IMI, MEM_WEN_S, RF_WEN_S, WB_ALU),
-        ORI  -> List(ALU_OR, OP1_RS1, OP2_IMI, MEM_WEN_S, RF_WEN_S, WB_ALU),
-        XORI -> List(ALU_XOR, OP1_RS1, OP2_IMI, MEM_WEN_S, RF_WEN_S, WB_ALU)
+        OR   -> List(ALU_OR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        XOR  -> List(ALU_XOR, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        ANDI -> List(ALU_AND, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        ORI  -> List(ALU_OR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        XORI -> List(ALU_XOR, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SLL  -> List(ALU_SLL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SRL  -> List(ALU_SRL, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SRA  -> List(ALU_SRA, OP1_RS1, OP2_RS2, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SLLI -> List(ALU_SLL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SRLI -> List(ALU_SRL, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU),
+        SRAI -> List(ALU_SRA, OP1_RS1, OP2_IMI, MEM_WEN_X, RF_WEN_S, WB_ALU)
       )
     )
     val List(func, op1_sel, op2_sel, mem_wen, rf_wen, wb_sel) = csignals;
@@ -75,11 +81,14 @@ class Core extends Module {
     val alu_out = MuxCase(
       0.U(WORD_LEN.W),
       Seq(
-        (func === ALU_ADD) -> (rs1_data + imm_i),
-        (func === ALU_SUB) -> (rs1_data - imm_i),
-        (func === ALU_AND) -> (rs1_data & imm_i),
-        (func === ALU_OR)  -> (rs1_data | imm_i),
-        (func === ALU_XOR) -> (rs1_data ^ imm_i)
+        (func === ALU_ADD) -> (op1_data + op2_data),
+        (func === ALU_SUB) -> (op1_data - op2_data),
+        (func === ALU_AND) -> (op1_data & op2_data),
+        (func === ALU_OR)  -> (op1_data | op2_data),
+        (func === ALU_XOR) -> (op1_data ^ op2_data),
+        (func === ALU_SLL) -> (op1_data << op2_data(4, 0))(31, 0),
+        (func === ALU_SRL) -> (op1_data >> op2_data(4, 0)).asUInt,
+        (func === ALU_SRA) -> (op1_data.asSInt >> op2_data(4, 0)).asUInt
       )
     );
     // ========== EX ==========
