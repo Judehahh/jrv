@@ -18,49 +18,94 @@ class Core extends Module {
     val regfile     = Mem(32, UInt(WORD_LEN.W));
     val csr_regfile = Mem(4096, UInt(WORD_LEN.W));
 
+    // ========== Pipeline regs ==========
+
+    // IF/ID
+    val id_reg_pc   = RegInit(0.U(WORD_LEN.W));
+    val id_reg_inst = RegInit(0.U(WORD_LEN.W));
+
+    // ID/EX
+    val ex_reg_pc       = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_op1_data = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_op2_data = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_rs2_data = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_rd_idx   = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_rf_wen   = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_func     = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_wb_sel   = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_imm_i    = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_imm_s    = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_imm_b    = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_imm_u    = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_imm_z    = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_csr_idx  = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_csr_cmd  = RegInit(0.U(WORD_LEN.W));
+    val ex_reg_mem_wen  = RegInit(0.U(WORD_LEN.W));
+
+    // EX/MEM
+    val mem_reg_pc       = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_op1_data = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_rs2_data = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_rd_idx   = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_alu_out  = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_rf_wen   = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_wb_sel   = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_imm_z    = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_csr_idx  = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_csr_cmd  = RegInit(0.U(WORD_LEN.W));
+    val mem_reg_mem_wen  = RegInit(0.U(WORD_LEN.W));
+
+    // MEM/WB
+    val wb_reg_rd_idx  = RegInit(0.U(WORD_LEN.W));
+    val wb_reg_rf_wen  = RegInit(0.U(WORD_LEN.W));
+    val wb_reg_wb_data = RegInit(0.U(WORD_LEN.W));
+
+    // ========== Pipeline regs ==========
+
     // ========== IF ==========
-    val inst = io.imem.inst;
+    val if_reg_pc   = RegInit(MEM_BASE);
+    val if_pc_plus4 = if_reg_pc + 4.U(WORD_LEN.W);
 
-    val pc_r     = RegInit(MEM_BASE);
-    val pc_plus4 = pc_r + 4.U(WORD_LEN.W);
+    io.imem.addr := if_reg_pc;
+    val if_inst = io.imem.inst; // fetch an instruction
 
-    val br_flag = Wire(Bool());
-    val br_addr = Wire(UInt(WORD_LEN.W));
+    val ex_br_flag   = Wire(Bool());
+    val ex_br_addr   = Wire(UInt(WORD_LEN.W));
+    val ex_jmp_flag  = if_inst === JAL || if_inst === JALR;
+    val ex_alu_out   = Wire(UInt(WORD_LEN.W));
 
-    val jmp_flag = inst === JAL || inst === JALR;
-    val alu_out  = Wire(UInt(WORD_LEN.W));
-
-    val trap_flag = inst === ECALL;
-
-    val pc_next = MuxCase(
-      pc_plus4,
+    val if_pc_next = MuxCase(
+      if_pc_plus4,
       Seq(
-        br_flag   -> br_addr,
-        jmp_flag  -> alu_out,
-        trap_flag -> csr_regfile(MTVEC)
+        ex_br_flag   -> ex_br_addr,
+        ex_jmp_flag  -> ex_alu_out,
+        (if_inst === ECALL) -> csr_regfile(MTVEC)
       )
     );
-    pc_r := pc_next;
+    if_reg_pc := if_pc_next;
 
-    io.imem.addr := pc_r;
     // ========== IF ==========
 
+    id_reg_pc   := if_reg_pc;
+    id_reg_inst := if_inst;
+
     // ========== ID ==========
-    val imm_i = Cat(Fill(20, inst(31)), inst(31, 20));
-    val imm_s = Cat(Fill(20, inst(31)), inst(31, 25), inst(11, 7));
-    val imm_b = Cat(Fill(20, inst(31)), inst(7), inst(30, 25), inst(11, 8), 0.U(1.W));
-    val imm_j = Cat(Fill(12, inst(31)), inst(19, 12), inst(20), inst(30, 21), 0.U(1.W));
-    val imm_u = Cat(inst(31, 12), 0.U(12.W));
-    val imm_z = Cat(0.U(27.W), inst(19, 15));
 
-    val rs1_idx  = inst(19, 15);
-    val rs2_idx  = inst(24, 20);
-    val rd_idx   = inst(11, 7);
-    val rs1_data = Mux(rs1_idx =/= 0.U(IDX_LEN.W), regfile(rs1_idx), 0.U(WORD_LEN.W));
-    val rs2_data = Mux(rs2_idx =/= 0.U(IDX_LEN.W), regfile(rs2_idx), 0.U(WORD_LEN.W));
+    val id_imm_i = Cat(Fill(20, id_reg_inst(31)), id_reg_inst(31, 20));
+    val id_imm_s = Cat(Fill(20, id_reg_inst(31)), id_reg_inst(31, 25), id_reg_inst(11, 7));
+    val id_imm_b = Cat(Fill(20, id_reg_inst(31)), id_reg_inst(7), id_reg_inst(30, 25), id_reg_inst(11, 8), 0.U(1.W));
+    val id_imm_j = Cat(Fill(12, id_reg_inst(31)), id_reg_inst(19, 12), id_reg_inst(20), id_reg_inst(30, 21), 0.U(1.W));
+    val id_imm_u = Cat(id_reg_inst(31, 12), 0.U(12.W));
+    val id_imm_z = Cat(0.U(27.W), id_reg_inst(19, 15));
 
-    val List(func, op1_sel, op2_sel, mem_wen, rf_wen, wb_sel, csr_cmd) = ListLookup(
-      inst,
+    val id_rs1_idx  = id_reg_inst(19, 15);
+    val id_rs2_idx  = id_reg_inst(24, 20);
+    val id_rd_idx   = id_reg_inst(11, 7);
+    val id_rs1_data = Mux(id_rs1_idx =/= 0.U(IDX_LEN.W), regfile(id_rs1_idx), 0.U(WORD_LEN.W));
+    val id_rs2_data = Mux(id_rs2_idx =/= 0.U(IDX_LEN.W), regfile(id_rs2_idx), 0.U(WORD_LEN.W));
+
+    val List(id_func, id_op1_sel, id_op2_sel, id_mem_wen, id_rf_wen, id_wb_sel, id_csr_cmd) = ListLookup(
+      id_reg_inst,
       List(ALU_X, OP1_X, OP2_X, MEM_WEN_X, RF_WEN_X, WB_X, CSR_X),
       Array(
         // Memory
@@ -114,114 +159,149 @@ class Core extends Module {
       )
     )
 
-    val op1_data = MuxCase(
+    val id_op1_data = MuxCase(
       0.U(WORD_LEN.W),
       Seq(
-        (op1_sel === OP1_RS1) -> rs1_data,
-        (op1_sel === OP1_PC)  -> pc_r,
-        (op1_sel === OP1_IMZ) -> imm_z
+        (id_op1_sel === OP1_RS1) -> id_rs1_data,
+        (id_op1_sel === OP1_PC)  -> id_reg_pc,
+        (id_op1_sel === OP1_IMZ) -> id_imm_z
       )
     )
 
-    val op2_data = MuxCase(
+    val id_op2_data = MuxCase(
       0.U(WORD_LEN.W),
       Seq(
-        (op2_sel === OP2_RS2) -> rs2_data,
-        (op2_sel === OP2_IMI) -> imm_i,
-        (op2_sel === OP2_IMS) -> imm_s,
-        (op2_sel === OP2_IMJ) -> imm_j,
-        (op2_sel === OP2_IMU) -> imm_u
+        (id_op2_sel === OP2_RS2) -> id_rs2_data,
+        (id_op2_sel === OP2_IMI) -> id_imm_i,
+        (id_op2_sel === OP2_IMS) -> id_imm_s,
+        (id_op2_sel === OP2_IMJ) -> id_imm_j,
+        (id_op2_sel === OP2_IMU) -> id_imm_u
       )
     )
+
+    val id_csr_idx = Mux(id_csr_cmd === CSR_E, MCAUSE, id_reg_inst(31, 20));
     // ========== ID ==========
 
+    ex_reg_pc       := id_reg_pc;
+    ex_reg_op1_data := id_op1_data;
+    ex_reg_op2_data := id_op2_data;
+    ex_reg_rs2_data := id_rs2_data;
+    ex_reg_rd_idx   := id_rd_idx;
+    ex_reg_rf_wen   := id_rf_wen;
+    ex_reg_func     := id_func;
+    ex_reg_wb_sel   := id_wb_sel;
+    ex_reg_imm_i    := id_imm_i;
+    ex_reg_imm_s    := id_imm_s;
+    ex_reg_imm_b    := id_imm_b;
+    ex_reg_imm_u    := id_imm_u;
+    ex_reg_imm_z    := id_imm_z;
+    ex_reg_csr_idx  := id_csr_idx;
+    ex_reg_csr_cmd  := id_csr_cmd;
+    ex_reg_mem_wen  := id_mem_wen;
+
     // ========== EX ==========
-    alu_out := MuxCase(
+    ex_alu_out := MuxCase(
       0.U(WORD_LEN.W),
       Seq(
-        (func === ALU_ADD)  -> (op1_data + op2_data),
-        (func === ALU_SUB)  -> (op1_data - op2_data),
-        (func === ALU_AND)  -> (op1_data & op2_data),
-        (func === ALU_OR)   -> (op1_data | op2_data),
-        (func === ALU_XOR)  -> (op1_data ^ op2_data),
-        (func === ALU_SLL)  -> (op1_data << op2_data(4, 0))(31, 0),
-        (func === ALU_SRL)  -> (op1_data >> op2_data(4, 0)).asUInt,
-        (func === ALU_SRA)  -> (op1_data.asSInt >> op2_data(4, 0)).asUInt,
-        (func === ALU_SLT)  -> (op1_data.asSInt < op2_data.asSInt).asUInt,
-        (func === ALU_SLTU) -> (op1_data < op2_data).asUInt,
-        (func === ALU_JALR) -> ((op1_data + op2_data) & (~1.U(WORD_LEN.W)).asUInt),
-        (func === ALU_SRC1) -> op1_data
+        (ex_reg_func === ALU_ADD)  -> (ex_reg_op1_data + ex_reg_op2_data),
+        (ex_reg_func === ALU_SUB)  -> (ex_reg_op1_data - ex_reg_op2_data),
+        (ex_reg_func === ALU_AND)  -> (ex_reg_op1_data & ex_reg_op2_data),
+        (ex_reg_func === ALU_OR)   -> (ex_reg_op1_data | ex_reg_op2_data),
+        (ex_reg_func === ALU_XOR)  -> (ex_reg_op1_data ^ ex_reg_op2_data),
+        (ex_reg_func === ALU_SLL)  -> (ex_reg_op1_data << ex_reg_op2_data(4, 0))(31, 0),
+        (ex_reg_func === ALU_SRL)  -> (ex_reg_op1_data >> ex_reg_op2_data(4, 0)).asUInt,
+        (ex_reg_func === ALU_SRA)  -> (ex_reg_op1_data.asSInt >> ex_reg_op2_data(4, 0)).asUInt,
+        (ex_reg_func === ALU_SLT)  -> (ex_reg_op1_data.asSInt < ex_reg_op2_data.asSInt).asUInt,
+        (ex_reg_func === ALU_SLTU) -> (ex_reg_op1_data < ex_reg_op2_data).asUInt,
+        (ex_reg_func === ALU_JALR) -> ((ex_reg_op1_data + ex_reg_op2_data) & (~1.U(WORD_LEN.W)).asUInt),
+        (ex_reg_func === ALU_SRC1) -> ex_reg_op1_data
       )
     );
 
-    br_flag := MuxCase(
+    ex_br_flag := MuxCase(
       false.B,
       Seq(
-        (func === BR_BEQ) -> (op1_data === op2_data),
-        (func === BNE)    -> !(op1_data === op2_data),
-        (func === BLT)    -> (op1_data.asSInt < op2_data.asSInt),
-        (func === BLTU)   -> (op1_data < op2_data),
-        (func === BGE)    -> !(op1_data.asSInt < op2_data.asSInt),
-        (func === BGEU)   -> !(op1_data < op2_data)
+        (ex_reg_func === BR_BEQ) -> (ex_reg_op1_data === ex_reg_op2_data),
+        (ex_reg_func === BNE)    -> !(ex_reg_op1_data === ex_reg_op2_data),
+        (ex_reg_func === BLT)    -> (ex_reg_op1_data.asSInt < ex_reg_op2_data.asSInt),
+        (ex_reg_func === BLTU)   -> (ex_reg_op1_data < ex_reg_op2_data),
+        (ex_reg_func === BGE)    -> !(ex_reg_op1_data.asSInt < ex_reg_op2_data.asSInt),
+        (ex_reg_func === BGEU)   -> !(ex_reg_op1_data < ex_reg_op2_data)
       )
     )
-    br_addr := pc_r + imm_b;
+    ex_br_addr := ex_reg_pc + ex_reg_imm_b;
     // ========== EX ==========
 
+    mem_reg_pc       := ex_reg_pc;
+    mem_reg_op1_data := ex_reg_op1_data;
+    mem_reg_rs2_data := ex_reg_rs2_data;
+    mem_reg_rd_idx   := ex_reg_rd_idx;
+    mem_reg_alu_out  := ex_alu_out;
+    mem_reg_rf_wen   := ex_reg_rf_wen;
+    mem_reg_wb_sel   := ex_reg_wb_sel;
+    mem_reg_imm_z    := ex_reg_imm_z;
+    mem_reg_csr_idx  := ex_reg_csr_idx;
+    mem_reg_csr_cmd  := ex_reg_csr_cmd;
+    mem_reg_mem_wen  := ex_reg_mem_wen;
+
     // ========== MEM ==========
-    io.dmem.addr := alu_out;
-    io.dmem.wen  := mem_wen;
-    io.dmem.din  := rs2_data;
+    io.dmem.addr := mem_reg_alu_out;
+    io.dmem.wen  := mem_reg_mem_wen;
+    io.dmem.din  := mem_reg_rs2_data;
 
     // csr
-    val csr_idx   = Mux(csr_cmd === CSR_E, MCAUSE, inst(31, 20));
-    val csr_rdata = csr_regfile(csr_idx);
+    val csr_rdata = csr_regfile(mem_reg_csr_idx);
     val csr_wdata = MuxCase(
       0.U(WORD_LEN.W),
       Seq(
-        (csr_cmd === CSR_W) -> op1_data,
-        (csr_cmd === CSR_S) -> (csr_rdata | op1_data),
-        (csr_cmd === CSR_C) -> (csr_rdata & (~op1_data).asUInt),
-        (csr_cmd === CSR_E) -> 11.U(WORD_LEN.W) // ECALL
+        (mem_reg_csr_cmd === CSR_W) -> mem_reg_op1_data,
+        (mem_reg_csr_cmd === CSR_S) -> (csr_rdata | mem_reg_op1_data),
+        (mem_reg_csr_cmd === CSR_C) -> (csr_rdata & (~mem_reg_op1_data).asUInt),
+        (mem_reg_csr_cmd === CSR_E) -> 11.U(WORD_LEN.W) // ECALL
       )
     )
 
-    when(csr_cmd =/= CSR_X) {
-        csr_regfile(csr_idx) := csr_wdata;
+    when(mem_reg_csr_cmd =/= CSR_X) {
+        csr_regfile(mem_reg_csr_idx) := csr_wdata;
     }
-    // ========== MEM ==========
 
-    // ========== WB ==========
-    val wb_data = MuxCase(
-      alu_out,
+    val mem_wb_data = MuxCase(
+      mem_reg_alu_out,
       Seq(
-        (wb_sel === WB_MEM) -> io.dmem.dout,
-        (wb_sel === WB_PC)  -> pc_plus4,
-        (wb_sel === WB_CSR) -> csr_rdata
+        (mem_reg_wb_sel === WB_MEM) -> io.dmem.dout,
+        (mem_reg_wb_sel === WB_PC)  -> (mem_reg_pc + 4.U(WORD_LEN.W)),
+        (mem_reg_wb_sel === WB_CSR) -> csr_rdata
       )
     );
+    // ========== MEM ==========
 
-    when(rf_wen === RF_WEN_S) {
-        regfile(rd_idx) := wb_data;
+    wb_reg_rd_idx  := mem_reg_rd_idx;
+    wb_reg_rf_wen  := mem_reg_rf_wen;
+    wb_reg_wb_data := mem_wb_data;
+
+    // ========== WB ==========
+
+    when(wb_reg_rf_wen === RF_WEN_S) {
+        regfile(wb_reg_rd_idx) := wb_reg_wb_data;
     }
     // ========== WB ==========
 
     // debug information
-    printf(p"pc_r       : 0x${Hexadecimal(pc_r)}\n");
-    printf(p"inst       : 0x${Hexadecimal(inst)}\n");
+    printf(p"pc_r       : 0x${Hexadecimal(if_reg_pc)}\n");
+    printf(p"inst       : 0x${Hexadecimal(if_inst)}\n");
     printf(p"gp         : 0x${Hexadecimal(regfile(3))}\n");
-    printf(p"rs1_idx    : $rs1_idx\n");
-    printf(p"rs2_idx    : $rs2_idx\n");
-    printf(p"rd_idx     : $rd_idx\n");
-    printf(p"rs1_data   : 0x${Hexadecimal(rs1_data)}\n");
-    printf(p"rs2_data   : 0x${Hexadecimal(rs2_data)}\n");
-    printf(p"wb_data    : 0x${Hexadecimal(wb_data)}\n");
-    printf(p"dmem.addr  : ${io.dmem.addr}\n");
-    printf(p"dmem.wen   : ${io.dmem.wen}\n")
-    printf(p"dmem.din   : 0x${Hexadecimal(io.dmem.din)}\n")
+//    printf(p"rs1_idx    : $rs1_idx\n");
+//    printf(p"rs2_idx    : $rs2_idx\n");
+//    printf(p"rd_idx     : $rd_idx\n");
+//    printf(p"rs1_data   : 0x${Hexadecimal(rs1_data)}\n");
+//    printf(p"rs2_data   : 0x${Hexadecimal(rs2_data)}\n");
+//    printf(p"wb_data    : 0x${Hexadecimal(wb_data)}\n");
+//    printf(p"dmem.addr  : ${io.dmem.addr}\n");
+//    printf(p"dmem.wen   : ${io.dmem.wen}\n")
+//    printf(p"dmem.din   : 0x${Hexadecimal(io.dmem.din)}\n")
     printf("-----------\n");
 
     // exit chiseltest
-    io.exit := (pc_r === 0x44.U(WORD_LEN.W));
+    io.exit := (mem_reg_pc === 0x44.U(WORD_LEN.W));
     io.gp   := regfile(3);
 }
