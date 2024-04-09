@@ -48,7 +48,7 @@ class Core extends Module {
     // ========== ID ==========
     val imm_i = Cat(Fill(20, inst(31)), inst(31, 20));
     val imm_s = Cat(Fill(20, inst(31)), inst(31, 25), inst(11, 7));
-    val imm_b = Cat(Fill(20, inst(31)), inst(7), inst(30, 25), inst(11, 8));
+    val imm_b = Cat(Fill(20, inst(31)), inst(7), inst(30, 25), inst(11, 8), 0.U(1.W));
     val imm_j = Cat(Fill(12, inst(31)), inst(19, 12), inst(20), inst(30, 21), 0.U(1.W));
     val imm_u = Cat(inst(31, 12), 0.U(12.W));
     val imm_z = Cat(0.U(27.W), inst(19, 15));
@@ -118,7 +118,8 @@ class Core extends Module {
       0.U(WORD_LEN.W),
       Seq(
         (op1_sel === OP1_RS1) -> rs1_data,
-        (op1_sel === OP1_PC)  -> pc_r
+        (op1_sel === OP1_PC)  -> pc_r,
+        (op1_sel === OP1_IMZ) -> imm_z
       )
     )
 
