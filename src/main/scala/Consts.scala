@@ -7,6 +7,8 @@ object Consts {
     val WORD_LEN = 32;
     val IDX_LEN  = 5;
     var MEM_BASE = 0.U(WORD_LEN.W);
+    val BUBBLE   = 0x00000013.U(WORD_LEN.W); // ADDI x0, x0, 0
+    val UNIMP    = 0xc0001073L.U(WORD_LEN.W) // CSRRW x0, cycle, x0
 
     // ========== Control signals ==========
     val FUNC_LEN = 5;

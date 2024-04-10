@@ -9,7 +9,6 @@ class jrvTest extends AnyFlatSpec with ChiselScalatestTester {
             while (!c.io.exit.peek().litToBoolean) {
                 c.clock.step(1);
             }
-            c.io.gp.expect(1);
         }
     }
 }

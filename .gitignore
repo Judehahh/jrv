@@ -4,6 +4,7 @@
 .scala-build/
 .vscode/
 results/
+.ccls-cache/
 ### Project Specific stuff
 test_run_dir/*
 ### XilinxISE template

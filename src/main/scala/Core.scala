@@ -69,16 +69,16 @@ class Core extends Module {
     io.imem.addr := if_reg_pc;
     val if_inst = io.imem.inst; // fetch an instruction
 
-    val ex_br_flag   = Wire(Bool());
-    val ex_br_addr   = Wire(UInt(WORD_LEN.W));
-    val ex_jmp_flag  = if_inst === JAL || if_inst === JALR;
-    val ex_alu_out   = Wire(UInt(WORD_LEN.W));
+    val ex_br_flag  = Wire(Bool());
+    val ex_br_addr  = Wire(UInt(WORD_LEN.W));
+    val ex_jmp_flag = Wire(Bool());
+    val ex_alu_out  = Wire(UInt(WORD_LEN.W));
 
     val if_pc_next = MuxCase(
       if_pc_plus4,
       Seq(
-        ex_br_flag   -> ex_br_addr,
-        ex_jmp_flag  -> ex_alu_out,
+        ex_br_flag          -> ex_br_addr,
+        ex_jmp_flag         -> ex_alu_out,
         (if_inst === ECALL) -> csr_regfile(MTVEC)
       )
     );
@@ -87,25 +87,27 @@ class Core extends Module {
     // ========== IF ==========
 
     id_reg_pc   := if_reg_pc;
-    id_reg_inst := if_inst;
+    id_reg_inst := Mux(ex_br_flag || ex_jmp_flag, BUBBLE, if_inst); // control hazard for IF stage
 
     // ========== ID ==========
 
-    val id_imm_i = Cat(Fill(20, id_reg_inst(31)), id_reg_inst(31, 20));
-    val id_imm_s = Cat(Fill(20, id_reg_inst(31)), id_reg_inst(31, 25), id_reg_inst(11, 7));
-    val id_imm_b = Cat(Fill(20, id_reg_inst(31)), id_reg_inst(7), id_reg_inst(30, 25), id_reg_inst(11, 8), 0.U(1.W));
-    val id_imm_j = Cat(Fill(12, id_reg_inst(31)), id_reg_inst(19, 12), id_reg_inst(20), id_reg_inst(30, 21), 0.U(1.W));
-    val id_imm_u = Cat(id_reg_inst(31, 12), 0.U(12.W));
-    val id_imm_z = Cat(0.U(27.W), id_reg_inst(19, 15));
+    val id_inst = Mux(ex_br_flag || ex_jmp_flag, BUBBLE, id_reg_inst); // control hazard for ID stage
 
-    val id_rs1_idx  = id_reg_inst(19, 15);
-    val id_rs2_idx  = id_reg_inst(24, 20);
-    val id_rd_idx   = id_reg_inst(11, 7);
+    val id_imm_i = Cat(Fill(20, id_inst(31)), id_inst(31, 20));
+    val id_imm_s = Cat(Fill(20, id_inst(31)), id_inst(31, 25), id_inst(11, 7));
+    val id_imm_b = Cat(Fill(20, id_inst(31)), id_inst(7), id_inst(30, 25), id_inst(11, 8), 0.U(1.W));
+    val id_imm_j = Cat(Fill(12, id_inst(31)), id_inst(19, 12), id_inst(20), id_inst(30, 21), 0.U(1.W));
+    val id_imm_u = Cat(id_inst(31, 12), 0.U(12.W));
+    val id_imm_z = Cat(0.U(27.W), id_inst(19, 15));
+
+    val id_rs1_idx  = id_inst(19, 15);
+    val id_rs2_idx  = id_inst(24, 20);
+    val id_rd_idx   = id_inst(11, 7);
     val id_rs1_data = Mux(id_rs1_idx =/= 0.U(IDX_LEN.W), regfile(id_rs1_idx), 0.U(WORD_LEN.W));
     val id_rs2_data = Mux(id_rs2_idx =/= 0.U(IDX_LEN.W), regfile(id_rs2_idx), 0.U(WORD_LEN.W));
 
     val List(id_func, id_op1_sel, id_op2_sel, id_mem_wen, id_rf_wen, id_wb_sel, id_csr_cmd) = ListLookup(
-      id_reg_inst,
+      id_inst,
       List(ALU_X, OP1_X, OP2_X, MEM_WEN_X, RF_WEN_X, WB_X, CSR_X),
       Array(
         // Memory
@@ -179,7 +181,7 @@ class Core extends Module {
       )
     )
 
-    val id_csr_idx = Mux(id_csr_cmd === CSR_E, MCAUSE, id_reg_inst(31, 20));
+    val id_csr_idx = Mux(id_csr_cmd === CSR_E, MCAUSE, id_inst(31, 20));
     // ========== ID ==========
 
     ex_reg_pc       := id_reg_pc;
@@ -230,6 +232,9 @@ class Core extends Module {
       )
     )
     ex_br_addr := ex_reg_pc + ex_reg_imm_b;
+
+    ex_jmp_flag := (ex_reg_wb_sel === WB_PC);
+
     // ========== EX ==========
 
     mem_reg_pc       := ex_reg_pc;
@@ -287,21 +292,24 @@ class Core extends Module {
     // ========== WB ==========
 
     // debug information
-    printf(p"pc_r       : 0x${Hexadecimal(if_reg_pc)}\n");
-    printf(p"inst       : 0x${Hexadecimal(if_inst)}\n");
-    printf(p"gp         : 0x${Hexadecimal(regfile(3))}\n");
-//    printf(p"rs1_idx    : $rs1_idx\n");
-//    printf(p"rs2_idx    : $rs2_idx\n");
-//    printf(p"rd_idx     : $rd_idx\n");
-//    printf(p"rs1_data   : 0x${Hexadecimal(rs1_data)}\n");
-//    printf(p"rs2_data   : 0x${Hexadecimal(rs2_data)}\n");
-//    printf(p"wb_data    : 0x${Hexadecimal(wb_data)}\n");
-//    printf(p"dmem.addr  : ${io.dmem.addr}\n");
-//    printf(p"dmem.wen   : ${io.dmem.wen}\n")
-//    printf(p"dmem.din   : 0x${Hexadecimal(io.dmem.din)}\n")
     printf("-----------\n");
+    printf(p"if_reg_pc        : 0x${Hexadecimal(if_reg_pc)}\n")
+    printf(p"id_reg_pc        : 0x${Hexadecimal(id_reg_pc)}\n")
+    printf(p"id_reg_inst      : 0x${Hexadecimal(id_reg_inst)}\n")
+    printf(p"id_inst          : 0x${Hexadecimal(id_inst)}\n")
+    printf(p"id_rs1_data      : 0x${Hexadecimal(id_rs1_data)}\n")
+    printf(p"id_rs2_data      : 0x${Hexadecimal(id_rs2_data)}\n")
+    printf(p"exe_reg_pc       : 0x${Hexadecimal(ex_reg_pc)}\n")
+    printf(p"exe_reg_op1_data : 0x${Hexadecimal(ex_reg_op1_data)}\n")
+    printf(p"exe_reg_op2_data : 0x${Hexadecimal(ex_reg_op2_data)}\n")
+    printf(p"exe_alu_out      : 0x${Hexadecimal(ex_alu_out)}\n")
+    printf(p"mem_reg_pc       : 0x${Hexadecimal(mem_reg_pc)}\n")
+    printf(p"mem_wb_data      : 0x${Hexadecimal(mem_wb_data)}\n")
+    printf(p"wb_reg_wb_data   : 0x${Hexadecimal(wb_reg_wb_data)}\n")
+    printf("-----------\n")
 
     // exit chiseltest
-    io.exit := (mem_reg_pc === 0x44.U(WORD_LEN.W));
+//    io.exit := (mem_reg_pc === 0x44.U(WORD_LEN.W));
+    io.exit := (id_reg_inst === UNIMP);
     io.gp   := regfile(3);
 }
