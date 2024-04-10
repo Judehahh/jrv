@@ -27,7 +27,7 @@ class Memory extends Module {
     val mem = Mem(4096 * 4, UInt(8.W));
 
     // Load hex file into memory.
-    loadMemoryFromFileInline(mem, "src/hex/ctrl_hazard.hex".toString());
+    loadMemoryFromFileInline(mem, "src/riscv/rv32mi-p-scall.hex".toString());
 
     // imem out
     io.imem.inst := Cat(
